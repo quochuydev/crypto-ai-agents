@@ -174,7 +174,7 @@
     <div class="controls">
       <div class="shift-wrap">
         <span>BTC from:</span>
-        <input type="date" id="btc-start" value="2025-06-10" />
+        <input type="date" id="btc-start" value="2025-10-01" />
       </div>
       <div class="shift-wrap">
         <span>BTC limit:</span>
@@ -182,11 +182,15 @@
       </div>
       <div class="shift-wrap">
         <span>Lead days:</span>
-        <input type="number" id="lead-days" value="232" min="1" max="1000" />
+        <input type="number" id="lead-days" value="114" min="1" max="1000" />
       </div>
       <div class="shift-wrap">
         <span>XAU limit:</span>
         <input type="number" id="xau-limit" value="1000" min="1" max="1000" />
+      </div>
+      <div class="shift-wrap">
+        <span>BTC extra days:</span>
+        <input type="number" id="btc-extra" value="60" min="0" max="1000" />
       </div>
     </div>
 
@@ -231,11 +235,11 @@
     return (await res.json()).map(k => ({ t: k[0], close: parseFloat(k[4]) }));
   }
 
-  function buildDatasets(leadMs) {
-    const n = Math.min(allBtc.length, allXau.length);
+  function buildDatasets(leadMs, btcExtra) {
+    const btcN = Math.min(allBtc.length, allXau.length + btcExtra);
     return {
-      btc: allBtc.slice(0, n).map(d => ({ x: d.t,           y: d.close, date: d.t })),
-      xau: allXau.slice(0, n).map(d => ({ x: d.t - leadMs,  y: d.close, date: d.t })),
+      btc: allBtc.slice(0, btcN).map(d => ({ x: d.t,          y: d.close, date: d.t })),
+      xau: allXau.map(d =>              ({ x: d.t - leadMs,   y: d.close, date: d.t })),
     };
   }
 
@@ -323,12 +327,14 @@
   }
 
   function updateLatestPrices() {
-    const n = Math.min(allBtc.length, allXau.length);
-    if (!n) return;
-    const btcPct = ((allBtc[n-1].close / allBtc[0].close - 1) * 100).toFixed(2);
-    document.getElementById('btc-price').textContent = `${btcPct >= 0 ? '+' : ''}${btcPct}%`;
-    const xauPct = ((allXau[n-1].close / allXau[0].close - 1) * 100).toFixed(2);
-    document.getElementById('xau-price').textContent = `${xauPct >= 0 ? '+' : ''}${xauPct}%`;
+    if (allBtc.length) {
+      const pct = ((allBtc[allBtc.length-1].close / allBtc[0].close - 1) * 100).toFixed(2);
+      document.getElementById('btc-price').textContent = `${pct >= 0 ? '+' : ''}${pct}%`;
+    }
+    if (allXau.length) {
+      const pct = ((allXau[allXau.length-1].close / allXau[0].close - 1) * 100).toFixed(2);
+      document.getElementById('xau-price').textContent = `${pct >= 0 ? '+' : ''}${pct}%`;
+    }
   }
 
   async function init() {
@@ -345,7 +351,8 @@
         fetchKlines(BTC_BASE, btcStart, btcLimit),
         fetchKlines(XAU_BASE, xauStart, xauLimit),
       ]);
-      const { btc, xau } = buildDatasets(leadMs);
+      const btcExtra = parseInt(document.getElementById('btc-extra').value, 10) || 0;
+    const { btc, xau } = buildDatasets(leadMs, btcExtra);
       document.getElementById('loader').style.display = 'none';
       if (chart) { chart.destroy(); chart = null; }
       initChart(btc, xau);
@@ -358,7 +365,7 @@
     }
   }
 
-  ['btc-start', 'btc-limit', 'lead-days', 'xau-limit'].forEach(id =>
+  ['btc-start', 'btc-limit', 'lead-days', 'xau-limit', 'btc-extra'].forEach(id =>
     document.getElementById(id).addEventListener('change', () => init())
   );
 
