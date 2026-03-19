@@ -222,12 +222,11 @@
   }
 
   function buildDatasets() {
-    const n = allXau.length; // both lines always show n points
-    // BTC window: slide backwards by leadDays from the end of available data
-    const btcStart = Math.max(0, allBtc.length - n - leadDays);
-    const btcSlice = allBtc.slice(btcStart, btcStart + n);
+    // BTC: oldest leadDays items out of the 200 fetched (the earlier period)
+    const btcSlice = allBtc.slice(0, leadDays);
     const btcBase = btcSlice[0].close;
     const xauBase = allXau[0].close;
+    // x-axis is day index (0, 1, 2...) so both lines start at (0, 0)
     return {
       btc: btcSlice.map((d, i) => ({ x: i, y: (d.close / btcBase - 1) * 100, price: d.close, date: d.t })),
       xau: allXau.map((d, i) => ({ x: i, y: (d.close / xauBase - 1) * 100, price: d.close, date: d.t })),
@@ -320,16 +319,16 @@
   }
 
   function updateLatestPrices() {
-    const n = allXau.length;
-    const btcStart = Math.max(0, allBtc.length - n - leadDays);
-    const btcSlice = allBtc.slice(btcStart, btcStart + n);
+    const btcSlice = allBtc.slice(0, leadDays);
     if (btcSlice.length) {
       const pct = ((btcSlice[btcSlice.length - 1].close / btcSlice[0].close - 1) * 100).toFixed(2);
-      document.getElementById('btc-price').textContent = (pct >= 0 ? '+' : '') + pct + '%';
+      const sign = pct >= 0 ? '+' : '';
+      document.getElementById('btc-price').textContent = `${sign}${pct}%`;
     }
     if (allXau.length) {
       const pct = ((allXau[allXau.length - 1].close / allXau[0].close - 1) * 100).toFixed(2);
-      document.getElementById('xau-price').textContent = (pct >= 0 ? '+' : '') + pct + '%';
+      const sign = pct >= 0 ? '+' : '';
+      document.getElementById('xau-price').textContent = `${sign}${pct}%`;
     }
   }
 
