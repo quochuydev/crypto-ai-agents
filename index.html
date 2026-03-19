@@ -169,7 +169,15 @@
     <div class="controls">
       <div class="shift-wrap">
         <span>BTC lead days:</span>
-        <input type="number" id="shift-input" value="100" min="1" max="200" title="Show oldest N BTC items vs all XAU items" />
+        <input type="number" id="shift-input" value="100" min="1" max="1000" />
+      </div>
+      <div class="shift-wrap">
+        <span>BTC limit:</span>
+        <input type="number" id="btc-limit" value="200" min="1" max="1000" />
+      </div>
+      <div class="shift-wrap">
+        <span>XAU limit:</span>
+        <input type="number" id="xau-limit" value="100" min="1" max="1000" />
       </div>
     </div>
 
@@ -196,13 +204,15 @@
   <p class="footer">Both lines normalized to % change from their start price. "BTC lead days" (N): oldest N of 200 BTC candles vs most recent 100 XAU candles. Data from Binance public API.</p>
 
 <script>
-  const BTC_URL = 'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200';
-  const XAU_URL = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1d&limit=100';
+  const BTC_BASE = 'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d';
+  const XAU_BASE = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1d';
 
+  let btcLimit = 200;
+  let xauLimit = 100;
   let allBtc = [];
   let allXau = [];
   let chart = null;
-  let leadDays = 100; // show oldest N items of BTC alongside all XAU items
+  let leadDays = 100;
 
   async function fetchKlines(url) {
     const res = await fetch(url);
@@ -323,10 +333,16 @@
   }
 
   async function init() {
+    document.getElementById('loader').style.display = 'flex';
+    document.getElementById('error-msg').style.display = 'none';
     try {
-      [allBtc, allXau] = await Promise.all([fetchKlines(BTC_URL), fetchKlines(XAU_URL)]);
+      [allBtc, allXau] = await Promise.all([
+        fetchKlines(`${BTC_BASE}&limit=${btcLimit}`),
+        fetchKlines(`${XAU_BASE}&limit=${xauLimit}`),
+      ]);
       const { btc, xau } = buildDatasets();
       document.getElementById('loader').style.display = 'none';
+      if (chart) { chart.destroy(); chart = null; }
       initChart(btc, xau);
       updateLatestPrices();
     } catch (err) {
@@ -337,13 +353,19 @@
     }
   }
 
-  const shiftInput = document.getElementById('shift-input');
-  shiftInput.addEventListener('change', () => {
-    const v = parseInt(shiftInput.value, 10);
-    if (!isNaN(v) && v >= 0) {
-      leadDays = v;
-      if (chart) updateChart();
-    }
+  document.getElementById('shift-input').addEventListener('change', e => {
+    const v = parseInt(e.target.value, 10);
+    if (!isNaN(v) && v >= 1) { leadDays = v; if (chart) updateChart(); }
+  });
+
+  document.getElementById('btc-limit').addEventListener('change', e => {
+    const v = parseInt(e.target.value, 10);
+    if (!isNaN(v) && v >= 1) { btcLimit = v; init(); }
+  });
+
+  document.getElementById('xau-limit').addEventListener('change', e => {
+    const v = parseInt(e.target.value, 10);
+    if (!isNaN(v) && v >= 1) { xauLimit = v; init(); }
   });
 
   init();
