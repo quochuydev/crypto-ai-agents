@@ -173,8 +173,8 @@
   <div class="card">
     <div class="controls">
       <div class="shift-wrap">
-        <span>BTC from:</span>
-        <input type="date" id="btc-start" value="2025-10-01" />
+        <span>XAU from:</span>
+        <input type="date" id="xau-start" value="2026-01-23" />
       </div>
       <div class="shift-wrap">
         <span>BTC limit:</span>
@@ -338,12 +338,12 @@
   }
 
   async function init() {
-    const btcStart = dateToMs(document.getElementById('btc-start').value);
+    const xauStart = dateToMs(document.getElementById('xau-start').value);
     const leadDays = parseInt(document.getElementById('lead-days').value, 10) || 1;
     const btcLimit = parseInt(document.getElementById('btc-limit').value, 10) || 1000;
     const xauLimit = parseInt(document.getElementById('xau-limit').value, 10) || 1000;
     const leadMs   = leadDays * 86400000;
-    const xauStart = btcStart + leadMs;
+    const btcStart = xauStart - leadMs;
     document.getElementById('loader').style.display = 'flex';
     document.getElementById('error-msg').style.display = 'none';
     try {
@@ -365,7 +365,7 @@
     }
   }
 
-  ['btc-start', 'btc-limit', 'lead-days', 'xau-limit', 'btc-extra'].forEach(id =>
+  ['xau-start', 'btc-limit', 'lead-days', 'xau-limit', 'btc-extra'].forEach(id =>
     document.getElementById(id).addEventListener('change', () => init())
   );
 
