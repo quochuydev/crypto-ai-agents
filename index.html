@@ -62,7 +62,6 @@
     }
 
     .shift-wrap input {
-      width: 64px;
       background: #1e2330;
       border: 1px solid #2a3147;
       color: #e2e8f0;
@@ -71,6 +70,12 @@
       font-size: 0.78rem;
       text-align: center;
       outline: none;
+    }
+
+    .shift-wrap input[type="number"] { width: 64px; }
+    .shift-wrap input[type="date"] {
+      width: auto;
+      color-scheme: dark;
     }
 
     .shift-wrap input:focus {
@@ -168,16 +173,20 @@
   <div class="card">
     <div class="controls">
       <div class="shift-wrap">
-        <span>BTC lead days:</span>
-        <input type="number" id="shift-input" value="100" min="1" max="1000" />
+        <span>BTC from:</span>
+        <input type="date" id="btc-start" value="2025-06-10" />
       </div>
       <div class="shift-wrap">
         <span>BTC limit:</span>
-        <input type="number" id="btc-limit" value="200" min="1" max="1000" />
+        <input type="number" id="btc-limit" value="1000" min="1" max="1000" />
+      </div>
+      <div class="shift-wrap">
+        <span>Lead days:</span>
+        <input type="number" id="lead-days" value="232" min="1" max="1000" />
       </div>
       <div class="shift-wrap">
         <span>XAU limit:</span>
-        <input type="number" id="xau-limit" value="100" min="1" max="1000" />
+        <input type="number" id="xau-limit" value="1000" min="1" max="1000" />
       </div>
     </div>
 
@@ -201,35 +210,32 @@
     <p class="error-msg" id="error-msg"></p>
   </div>
 
-  <p class="footer">Both lines normalized to % change from their start price. "BTC lead days" (N): oldest N of 200 BTC candles vs most recent 100 XAU candles. Data from Binance public API.</p>
+  <p class="footer">Real prices. BTC on left axis, XAU on right axis. XAU is plotted shifted left by "Lead days" so its shape aligns with BTC. Data from Binance public API.</p>
 
 <script>
   const BTC_BASE = 'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d';
   const XAU_BASE = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1d';
 
-  let btcLimit = 200;
-  let xauLimit = 100;
   let allBtc = [];
   let allXau = [];
   let chart = null;
-  let leadDays = 100;
 
-  async function fetchKlines(url) {
+  function dateToMs(dateStr) { return new Date(dateStr).getTime(); }
+  function fmtDate(ms) { return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+  function fmtPrice(v) { return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  async function fetchKlines(baseUrl, startTime, limit) {
+    const url = `${baseUrl}&startTime=${startTime}&limit=${limit}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return data.map(k => ({ t: k[0], close: parseFloat(k[4]) }));
+    return (await res.json()).map(k => ({ t: k[0], close: parseFloat(k[4]) }));
   }
 
-  function buildDatasets() {
-    // BTC: oldest leadDays items out of the 200 fetched (the earlier period)
-    const btcSlice = allBtc.slice(0, leadDays);
-    const btcBase = btcSlice[0].close;
-    const xauBase = allXau[0].close;
-    // x-axis is day index (0, 1, 2...) so both lines start at (0, 0)
+  function buildDatasets(leadMs) {
+    const n = Math.min(allBtc.length, allXau.length);
     return {
-      btc: btcSlice.map((d, i) => ({ x: i, y: (d.close / btcBase - 1) * 100, price: d.close, date: d.t })),
-      xau: allXau.map((d, i) => ({ x: i, y: (d.close / xauBase - 1) * 100, price: d.close, date: d.t })),
+      btc: allBtc.slice(0, n).map(d => ({ x: d.t,           y: d.close, date: d.t })),
+      xau: allXau.slice(0, n).map(d => ({ x: d.t - leadMs,  y: d.close, date: d.t })),
     };
   }
 
@@ -249,6 +255,7 @@
             pointHoverRadius: 4,
             tension: 0.2,
             fill: true,
+            yAxisID: 'yBtc',
           },
           {
             label: 'XAU',
@@ -260,6 +267,7 @@
             pointHoverRadius: 4,
             tension: 0.2,
             fill: true,
+            yAxisID: 'yXau',
           },
         ],
       },
@@ -277,70 +285,67 @@
             bodyColor: '#e2e8f0',
             padding: 12,
             callbacks: {
-              title: items => 'Day ' + items[0].parsed.x,
+              title: items => fmtDate(items[0].parsed.x),
               label: item => {
-                const pct = item.parsed.y.toFixed(2);
-                const sign = item.parsed.y >= 0 ? '+' : '';
-                const price = item.raw.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const date = new Date(item.raw.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                return ` ${item.dataset.label} (${date}): ${sign}${pct}%  ($${price})`;
+                const price = fmtPrice(item.raw.y);
+                if (item.datasetIndex === 1) {
+                  return ` XAU (actual: ${fmtDate(item.raw.date)}): ${price}`;
+                }
+                return ` BTC: ${price}`;
               },
             },
           },
         },
         scales: {
           x: {
-            type: 'linear',
+            type: 'time',
+            time: { tooltipFormat: 'MMM d, yyyy' },
             grid: { color: '#1a1f2e' },
-            ticks: { color: '#475569', maxTicksLimit: 10, callback: v => 'Day ' + v },
-            title: { display: true, text: 'Days since start', color: '#475569', font: { size: 11 } },
+            ticks: { color: '#475569', maxTicksLimit: 10 },
           },
-          y: {
+          yBtc: {
             type: 'linear',
             position: 'left',
             grid: { color: '#1a1f2e' },
-            ticks: {
-              color: '#94a3b8',
-              callback: v => (v >= 0 ? '+' : '') + v.toFixed(0) + '%',
-            },
-            title: { display: true, text: '% change from start', color: '#94a3b8', font: { size: 11 } },
+            ticks: { color: '#f7931a', callback: v => '$' + v.toLocaleString() },
+            title: { display: true, text: 'BTC (USD)', color: '#f7931a', font: { size: 11 } },
+          },
+          yXau: {
+            type: 'linear',
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#ffd700', callback: v => '$' + v.toLocaleString() },
+            title: { display: true, text: 'XAU (USD)', color: '#ffd700', font: { size: 11 } },
           },
         },
       },
     });
   }
 
-  function updateChart() {
-    const { btc, xau } = buildDatasets();
-    chart.data.datasets[0].data = btc;
-    chart.data.datasets[1].data = xau;
-    chart.update('active');
-    updateLatestPrices();
-  }
-
   function updateLatestPrices() {
-    const btcSlice = allBtc.slice(0, leadDays);
-    if (btcSlice.length) {
-      const pct = ((btcSlice[btcSlice.length - 1].close / btcSlice[0].close - 1) * 100).toFixed(2);
-      const sign = pct >= 0 ? '+' : '';
-      document.getElementById('btc-price').textContent = `${sign}${pct}%`;
-    }
-    if (allXau.length) {
-      const pct = ((allXau[allXau.length - 1].close / allXau[0].close - 1) * 100).toFixed(2);
-      const sign = pct >= 0 ? '+' : '';
-      document.getElementById('xau-price').textContent = `${sign}${pct}%`;
-    }
+    const n = Math.min(allBtc.length, allXau.length);
+    if (!n) return;
+    const btcPct = ((allBtc[n-1].close / allBtc[0].close - 1) * 100).toFixed(2);
+    document.getElementById('btc-price').textContent = `${btcPct >= 0 ? '+' : ''}${btcPct}%`;
+    const xauPct = ((allXau[n-1].close / allXau[0].close - 1) * 100).toFixed(2);
+    document.getElementById('xau-price').textContent = `${xauPct >= 0 ? '+' : ''}${xauPct}%`;
   }
 
   async function init() {
+    const btcStart = dateToMs(document.getElementById('btc-start').value);
+    const leadDays = parseInt(document.getElementById('lead-days').value, 10) || 1;
+    const btcLimit = parseInt(document.getElementById('btc-limit').value, 10) || 1000;
+    const xauLimit = parseInt(document.getElementById('xau-limit').value, 10) || 1000;
+    const leadMs   = leadDays * 86400000;
+    const xauStart = btcStart + leadMs;
     document.getElementById('loader').style.display = 'flex';
     document.getElementById('error-msg').style.display = 'none';
     try {
       [allBtc, allXau] = await Promise.all([
-        fetchKlines(`${BTC_BASE}&limit=${btcLimit}`),
-        fetchKlines(`${XAU_BASE}&limit=${xauLimit}`),
+        fetchKlines(BTC_BASE, btcStart, btcLimit),
+        fetchKlines(XAU_BASE, xauStart, xauLimit),
       ]);
-      const { btc, xau } = buildDatasets();
+      const { btc, xau } = buildDatasets(leadMs);
       document.getElementById('loader').style.display = 'none';
       if (chart) { chart.destroy(); chart = null; }
       initChart(btc, xau);
@@ -353,20 +358,9 @@
     }
   }
 
-  document.getElementById('shift-input').addEventListener('change', e => {
-    const v = parseInt(e.target.value, 10);
-    if (!isNaN(v) && v >= 1) { leadDays = v; if (chart) updateChart(); }
-  });
-
-  document.getElementById('btc-limit').addEventListener('change', e => {
-    const v = parseInt(e.target.value, 10);
-    if (!isNaN(v) && v >= 1) { btcLimit = v; init(); }
-  });
-
-  document.getElementById('xau-limit').addEventListener('change', e => {
-    const v = parseInt(e.target.value, 10);
-    if (!isNaN(v) && v >= 1) { xauLimit = v; init(); }
-  });
+  ['btc-start', 'btc-limit', 'lead-days', 'xau-limit'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => init())
+  );
 
   init();
 </script>
