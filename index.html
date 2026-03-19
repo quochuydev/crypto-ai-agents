@@ -226,10 +226,10 @@
     // XAU: reference axis, no shift
     const xauFiltered = allXau.filter(d => !cutoff || d.t >= cutoff);
 
-    // BTC: shift timestamps back by shiftDays so BTC day (X) appears at (X - shift) on x-axis
-    // That means BTC from 31/1 with shift=30 shows at 1/1, aligning with XAU's 1/1
+    // BTC: shift timestamps forward by shiftDays so BTC day (X) appears at (X + shift) on x-axis
+    // That means BTC from 1/1 with shift=30 shows at 31/1, aligning with XAU's 31/1
     const btcFiltered = allBtc
-      .map(d => ({ shiftedT: d.t - shiftMs, actualT: d.t, close: d.close }))
+      .map(d => ({ shiftedT: d.t + shiftMs, actualT: d.t, close: d.close }))
       .filter(d => !cutoff || d.shiftedT >= cutoff);
 
     return {
